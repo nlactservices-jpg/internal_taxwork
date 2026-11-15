@@ -16,6 +16,25 @@ import {
 } from "@/lib/file-categories";
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx";
+const ACCEPT_EXTENSIONS = ACCEPT.split(",");
+
+function isSupportedUpload(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return ACCEPT_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
+function isPreviewable(file: FileRow): boolean {
+  const name = file.file_name.toLowerCase();
+  return (
+    file.mime_type === "application/pdf" ||
+    (file.mime_type?.startsWith("image/") ?? false) ||
+    /\.(pdf|png|jpe?g|gif|webp)$/.test(name)
+  );
+}
+
+function previewHref(file: FileRow): string {
+  return `/api/files/preview?id=${encodeURIComponent(file.id)}`;
+}
 
 function fmtSize(bytes: number) {
   if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
@@ -95,15 +114,19 @@ export default function FileSection({
     [files]
   );
 
-  async function upload(category: string, input: HTMLInputElement) {
-    const list = input.files;
-    if (!list?.length) return;
+  async function upload(category: string, files: File[]) {
+    if (!files.length) return;
 
     setUploadingCategory(category);
     setError("");
     let failed = 0;
+    let rejected = 0;
 
-    for (const file of Array.from(list)) {
+    for (const file of files) {
+      if (!isSupportedUpload(file)) {
+        rejected += 1;
+        continue;
+      }
       try {
         const signRes = await fetch("/api/files/sign-upload", {
           method: "POST",
@@ -137,9 +160,11 @@ export default function FileSection({
     }
 
     setUploadingCategory(null);
-    input.value = "";
-    if (failed) {
-      setError(`อัปโหลดไม่สำเร็จ ${failed} ไฟล์ กรุณาลองอีกครั้ง`);
+    if (failed || rejected) {
+      const parts: string[] = [];
+      if (rejected) parts.push(`ไม่รองรับ ${rejected} ไฟล์`);
+      if (failed) parts.push(`อัปโหลดไม่สำเร็จ ${failed} ไฟล์`);
+      setError(`${parts.join(" · ")} กรุณาลองอีกครั้ง`);
     }
     await load();
     onChanged?.();
@@ -331,14 +356,26 @@ function DocumentRow({
         {badge.label}
       </span>
       <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onDownload}
-          className="block max-w-full truncate text-left text-sm font-medium text-neutral-800 hover:text-blue-700 hover:underline"
-          title={`ดาวน์โหลด ${file.file_name}`}
-        >
-          {file.file_name}
-        </button>
+        {isPreviewable(file) ? (
+          <a
+            href={previewHref(file)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block max-w-full truncate text-left text-sm font-medium text-neutral-800 hover:text-blue-700 hover:underline"
+            title={`เปิดดู ${file.file_name}`}
+          >
+            {file.file_name}
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="block max-w-full truncate text-left text-sm font-medium text-neutral-800 hover:text-blue-700 hover:underline"
+            title={`ดาวน์โหลด ${file.file_name}`}
+          >
+            {file.file_name}
+          </button>
+        )}
         <div className="text-[11px] text-neutral-400">
           {fmtSize(file.size_bytes)} · {fmtDate(file.uploaded_at)}
         </div>
@@ -357,6 +394,15 @@ function DocumentRow({
           </option>
         ))}
       </select>
+      <button
+        type="button"
+        className="rounded p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+        onClick={onDownload}
+        aria-label={`ดาวน์โหลด ${file.file_name}`}
+        title="ดาวน์โหลด"
+      >
+        <DownloadIcon />
+      </button>
       <button
         type="button"
         className="rounded p-1.5 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
@@ -391,14 +437,15 @@ function SystemReportRow({
         {badge.label}
       </span>
       <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onDownload}
+        <a
+          href={previewHref(file)}
+          target="_blank"
+          rel="noopener noreferrer"
           className="block max-w-full truncate text-left text-sm font-medium text-neutral-700 hover:text-blue-700 hover:underline"
-          title={`ดาวน์โหลด ${file.file_name}`}
+          title={`เปิดดู ${file.file_name}`}
         >
           {file.file_name}
-        </button>
+        </a>
         <div className="text-[11px] text-neutral-400">
           {fmtSize(file.size_bytes)} · {fmtDate(file.uploaded_at)} · สร้างโดยระบบ
         </div>
@@ -425,23 +472,54 @@ function UploadControl({
   hasFiles: boolean;
   busy: boolean;
   disabled: boolean;
-  onUpload: (category: string, input: HTMLInputElement) => void;
+  onUpload: (category: string, files: File[]) => void | Promise<void>;
 }) {
+  const [dragging, setDragging] = useState(false);
   const blocked = disabled || busy;
   return (
     <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (blocked) return;
+        e.dataTransfer.dropEffect = "copy";
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        if (blocked) return;
+        const files = Array.from(e.dataTransfer.files ?? []);
+        if (files.length) void onUpload(category, files);
+      }}
       className={
         hasFiles
-          ? `inline-flex cursor-pointer items-center gap-1.5 rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50 ${
-              blocked ? "pointer-events-none opacity-50" : ""
-            }`
-          : `flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-3 py-4 text-center text-xs text-neutral-500 hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700 ${
-              blocked ? "pointer-events-none opacity-50" : ""
-            }`
+          ? `inline-flex cursor-pointer items-center gap-1.5 rounded border px-2 py-1 text-xs transition-colors ${
+              dragging
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
+            } ${blocked ? "pointer-events-none opacity-50" : ""}`
+          : `flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-4 text-center text-xs transition-colors ${
+              dragging
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-neutral-300 bg-neutral-50 text-neutral-500 hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700"
+            } ${blocked ? "pointer-events-none opacity-50" : ""}`
       }
     >
       {busy ? (
         "กำลังอัปโหลด..."
+      ) : dragging ? (
+        hasFiles ? (
+          "วางไฟล์ที่นี่"
+        ) : (
+          <>
+            <DropIcon />
+            <span>วางไฟล์ที่นี่</span>
+          </>
+        )
       ) : hasFiles ? (
         "+ อัปโหลด"
       ) : (
@@ -449,7 +527,7 @@ function UploadControl({
           <UploadIcon />
           <span>อัปโหลดไฟล์</span>
           <span className="text-[10px] text-neutral-400">
-            PDF, รูปภาพ, Word, Excel
+            PDF, รูปภาพ, Word, Excel · ลากมาวางได้
           </span>
         </>
       )}
@@ -461,7 +539,9 @@ function UploadControl({
         disabled={blocked}
         onChange={(e) => {
           const input = e.currentTarget;
-          void onUpload(category, input);
+          const files = Array.from(input.files ?? []);
+          input.value = "";
+          if (files.length) void onUpload(category, files);
         }}
       />
     </label>
@@ -501,6 +581,46 @@ function UploadIcon() {
     >
       <path
         d="M8 11V3M5 6l3-3 3 3M3 13h10"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DropIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 3v8M5 8l3 3 3-3M3 13h10"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 3v7M5.5 7.5 8 10l2.5-2.5M3 13h10"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
