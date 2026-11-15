@@ -6,7 +6,12 @@ import { listMonthlyReportFiles, type MonthlyReportFileRow } from "@/lib/actions
 import SearchInput from "@/components/search-input";
 import EmptyState from "@/components/empty-state";
 import ClientAvatar from "@/components/client-avatar";
-import { downloadStoredFile } from "@/lib/download";
+import {
+  downloadStoredFile,
+  fetchStoredFile,
+  sanitizeFileName,
+  saveBlob,
+} from "@/lib/download";
 import { ToastStack, useToasts } from "@/components/toast";
 
 const THAI_MONTHS = [
@@ -32,6 +37,17 @@ function fmtTime(iso: string) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function zipStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+}
+
+function reportZipName(scope: string | null) {
+  const prefix = scope?.trim() ? `${scope.trim()}-` : "";
+  const base = sanitizeFileName(`${prefix}รายงานรายเดือน`);
+  return `${base}-${zipStamp()}.zip`;
+}
+
 /** "2026-08" -> "สิงหาคม 2569". */
 function periodToThai(period: string | null): string {
   if (!period) return "—";
@@ -55,6 +71,26 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <path
+        d="M8 3v7M5 7.5l3 3 3-3M3 13h10"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
@@ -72,6 +108,8 @@ export default function ReportFilesPanel() {
   const [filterYear, setFilterYear] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const { toasts, push, dismiss } = useToasts();
 
   const load = useCallback(async () => {
@@ -103,6 +141,10 @@ export default function ReportFilesPanel() {
     [rows]
   );
   const hasFilter = filterClient !== "" || filterYear !== "" || filterMonth !== "" || filterStatus !== "";
+  const selectedClientName = useMemo(
+    () => clients.find((c) => c.id === filterClient)?.name ?? null,
+    [clients, filterClient]
+  );
   const activeFilterCount = [filterClient, filterYear, filterMonth, filterStatus].filter(Boolean).length;
 
   const filtered = useMemo(() => {
@@ -146,6 +188,65 @@ export default function ReportFilesPanel() {
     }
   }
 
+  async function downloadZip(items: MonthlyReportFileRow[], zipName: string) {
+    if (bulkBusy || !items.length) return;
+    setBulkBusy(true);
+    setBulkProgress({ done: 0, total: items.length });
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const used = new Set<string>();
+      let failed = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        const row = items[i];
+        try {
+          const blob = await fetchStoredFile({
+            storagePath: row.storage_path,
+            fileName: row.file_name,
+          });
+          const folder = sanitizeFileName(row.client_name?.trim() || "ไม่ระบุลูกค้า");
+          const fileName = sanitizeFileName(row.file_name || "report.pdf");
+          const dot = fileName.lastIndexOf(".");
+          const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+          const ext = dot > 0 ? fileName.slice(dot) : "";
+          let path = `${folder}/${fileName}`;
+          let n = 2;
+          while (used.has(path)) {
+            path = `${folder}/${stem} (${n})${ext}`;
+            n += 1;
+          }
+          used.add(path);
+          zip.file(path, blob);
+        } catch {
+          failed += 1;
+        }
+        setBulkProgress({ done: i + 1, total: items.length });
+      }
+
+      if (failed === items.length) {
+        push({ type: "error", message: "ดาวน์โหลดไม่สำเร็จ" });
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+      saveBlob(blob, zipName);
+      if (failed) {
+        push({
+          type: "info",
+          message: `ดาวน์โหลด ${items.length - failed} ไฟล์ · ล้มเหลว ${failed} ไฟล์`,
+        });
+      } else {
+        push({ type: "success", message: `ดาวน์โหลด ${items.length} ไฟล์แล้ว` });
+      }
+    } catch {
+      push({ type: "error", message: "สร้างไฟล์ ZIP ไม่สำเร็จ" });
+    } finally {
+      setBulkBusy(false);
+      setBulkProgress(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Summary */}
@@ -168,9 +269,36 @@ export default function ReportFilesPanel() {
               ล้างตัวกรอง
             </button>
           )}
-          <span className="ml-auto text-xs text-neutral-500">
-            {loading ? "กำลังโหลด..." : `${filtered.length.toLocaleString()} รายการ`}
-          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="text-xs text-neutral-500">
+              {loading ? "กำลังโหลด..." : `${filtered.length.toLocaleString()} รายการ`}
+            </span>
+            <button
+              type="button"
+              className="btn-primary inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-xs"
+              onClick={() =>
+                void downloadZip(
+                  filtered,
+                  reportZipName(filterClient ? selectedClientName : null)
+                )
+              }
+              disabled={!filtered.length || bulkBusy}
+              title={
+                filterClient
+                  ? `รวมรายงานทั้งหมดของ ${selectedClientName ?? "ลูกค้า"} เป็น ZIP`
+                  : "รวมรายงานที่แสดงทั้งหมดเป็น ZIP (แยกโฟลเดอร์ตามลูกค้า)"
+              }
+            >
+              <DownloadIcon />
+              <span className="truncate">
+                {bulkBusy && bulkProgress
+                  ? `กำลังดาวน์โหลด ${bulkProgress.done}/${bulkProgress.total}`
+                  : filterClient
+                    ? `ดาวน์โหลดของ ${selectedClientName ?? "ลูกค้า"} (${filtered.length})`
+                    : `ดาวน์โหลดทั้งหมด (${filtered.length})`}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="card flex flex-wrap items-end gap-3">
@@ -210,6 +338,10 @@ export default function ReportFilesPanel() {
             </select>
           </div>
         </div>
+
+        <p className="text-[11px] text-neutral-400">
+          ไฟล์ ZIP จะแยกโฟลเดอร์ตามลูกค้า — เลือกลูกค้าเพื่อดาวน์โหลดเฉพาะรายนั้น
+        </p>
 
         {activeFilterCount > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs">

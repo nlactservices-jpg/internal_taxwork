@@ -56,13 +56,13 @@ export async function downloadFromUrl(
 }
 
 /**
- * Trigger a browser download for a private R2 object through the same-origin
- * proxy. Returning a promise lets callers show busy state.
+ * Fetch a private R2 object through the same-origin proxy and return its bytes.
+ * Shared by single-file downloads and bulk ZIP exports.
  */
-export async function downloadStoredFile(params: {
+export async function fetchStoredFile(params: {
   storagePath: string;
   fileName?: string;
-}): Promise<void> {
+}): Promise<Blob> {
   const res = await fetch("/api/files/download", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -78,5 +78,16 @@ export async function downloadStoredFile(params: {
     }
     throw new Error(message);
   }
-  saveBlob(await res.blob(), params.fileName);
+  return res.blob();
+}
+
+/**
+ * Trigger a browser download for a private R2 object through the same-origin
+ * proxy. Returning a promise lets callers show busy state.
+ */
+export async function downloadStoredFile(params: {
+  storagePath: string;
+  fileName?: string;
+}): Promise<void> {
+  saveBlob(await fetchStoredFile(params), params.fileName);
 }
