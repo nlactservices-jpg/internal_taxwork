@@ -325,7 +325,8 @@ export default function ShareView({
               อย่าลืมเก็บรายงานฉบับเต็ม (PDF)
             </div>
             <p className="mt-0.5 text-amber-700">
-              เก็บไว้ตรวจสอบและเป็นหลักฐานการชำระเงิน — ดาวน์โหลดหรือส่งเข้าอีเมลของท่านได้ที่ท้ายรายการ
+              เก็บไว้ตรวจสอบและเป็นหลักฐานการชำระเงิน — ดูตัวอย่าง ดาวน์โหลด
+              หรือส่งเข้าอีเมลของท่านได้ที่ท้ายรายการ
             </p>
           </div>
         </div>
@@ -638,6 +639,31 @@ export default function ShareView({
         <section className="space-y-2">
           <SectionTitle>รับเอกสาร</SectionTitle>
           <div className="space-y-1">
+            <a
+              href={`/r/${token}/pdf?inline=1`}
+              target="_blank"
+              rel="noreferrer"
+              title="เปิดรายงานในแท็บใหม่"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-center text-sm font-semibold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 active:bg-neutral-100"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden="true"
+              >
+                <path
+                  d="M1.5 8S4 4 8 4s6.5 4 6.5 4S12 12 8 12 1.5 8 1.5 8Z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="8" cy="8" r="1.8" />
+              </svg>
+              ดูตัวอย่างรายงาน (PDF)
+            </a>
             <ShareDownloadButton pdfUrl={`/r/${token}/pdf`} fileName={fileName} />
             {emailAddress && (
               <ShareEmailButton

@@ -318,7 +318,7 @@ body { font-family: 'Sarabun', sans-serif; color: #17171c; font-size: 9.5pt; lin
   font-size: 12pt;
   line-height: 1.1;
   font-weight: 700;
-  color: var(--money, #1e40af);
+  color: #17171c;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
@@ -424,7 +424,7 @@ function renderCoverSection(model: ReportModel): string {
         <div><div class="mlabel">จัดทำโดย</div><div class="mvalue">${escapeHtml(model.preparedBy)}</div></div>
       </div>
 
-      <h2 class="section-title">รายละเอียดรายการภาษี</h2>
+      <h2 class="section-title">รายการที่ต้องชำระ</h2>
       ${cards || `<p class="muted">ไม่มีรายการ</p>`}
     </section>`;
 }

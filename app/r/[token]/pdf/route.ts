@@ -13,9 +13,10 @@ import { asciiFileName } from "@/lib/download";
 export const runtime = "nodejs";
 
 /**
- * Public, tokenized download of the latest stored report PDF. The R2 object
- * stays private; we stream it back with an attachment disposition so the
- * browser downloads it instead of opening it inline.
+ * Public, tokenized access to the latest stored report PDF. The R2 object stays
+ * private; `?inline=1` serves it inline for the share page's preview action,
+ * while the default response keeps the attachment disposition used by the
+ * download button.
  */
 export async function GET(
   request: Request,
@@ -42,26 +43,40 @@ export async function GET(
     return NextResponse.json({ error: "no report file" }, { status: 404 });
   }
 
+  const inline = new URL(request.url).searchParams.get("inline") === "1";
+  const range = request.headers.get("range") ?? undefined;
+
   try {
     const obj = await r2.send(
-      new GetObjectCommand({ Bucket: R2_BUCKET, Key: file.storage_path })
+      new GetObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: file.storage_path,
+        Range: range,
+      })
     );
     const bytes = await obj.Body?.transformToByteArray();
     if (!bytes) {
       return NextResponse.json({ error: "empty report file" }, { status: 404 });
     }
     const name = file.file_name || "report.pdf";
+    const headers: Record<string, string> = {
+      "Content-Type": "application/pdf",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asciiFileName(name)}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "Cache-Control": "private, no-store",
+      "Accept-Ranges": "bytes",
+      "X-Robots-Tag": "noindex, nofollow",
+    };
+    if (obj.ContentLength != null) {
+      headers["Content-Length"] = String(obj.ContentLength);
+    } else {
+      headers["Content-Length"] = String(bytes.byteLength);
+    }
+    if (obj.ContentRange) headers["Content-Range"] = obj.ContentRange;
+
     return new NextResponse(new Uint8Array(bytes), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "X-Content-Type-Options": "nosniff",
-        // force download; include a UTF-8 filename for Thai names
-        "Content-Disposition": `attachment; filename="${asciiFileName(name)}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-        "Content-Length": String(bytes.byteLength),
-        "Cache-Control": "private, no-store",
-        "X-Robots-Tag": "noindex, nofollow",
-      },
+      status: range && obj.ContentRange ? 206 : 200,
+      headers,
     });
   } catch (error) {
     console.error("share pdf download failed:", error);

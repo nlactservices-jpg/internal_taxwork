@@ -109,7 +109,6 @@ const COLOR_HEADER_BG = rgb(0.93, 0.94, 0.96);
 const COLOR_WHITE = rgb(1, 1, 1);
 // Monochrome palette for the modern (print-friendly) cover.
 const COLOR_INK = rgb(0.14, 0.14, 0.16);
-const COLOR_MONEY = rgb(0.118, 0.251, 0.686);
 const COLOR_PANEL = rgb(0.97, 0.97, 0.97);
 const COLOR_PANEL_ALT = rgb(0.955, 0.955, 0.96);
 
@@ -704,7 +703,7 @@ async function drawCoverClassic(
     await r.text(contactLine, { size: 10, color: COLOR_MUTED });
 
   r.y -= 10;
-  await r.text("สรุปรายการ", { size: 12, bold: true });
+  await r.text("รายการที่ต้องชำระ", { size: 12, bold: true });
 
   const rowPadY = 7;
   const headerH = 24;
@@ -797,7 +796,7 @@ async function drawCoverClassic(
     const amtTw = r.measureText(amtText, fontSize, false);
     await r.drawTextCanvas(amtText, amtX + amtW - 6 - amtTw, top - 14, {
       size: fontSize,
-      color: COLOR_MONEY,
+      color: COLOR_TEXT,
     });
     for (let li = 0; li < methLines.length; li++) {
       await r.drawTextCanvas(methLines[li], methX + 6, top - 14 - li * lh, {
@@ -1005,7 +1004,7 @@ async function drawCoverModern(
   r.y = gridTop - gridH - 12;
 
   // ---- Summary heading ----
-  await r.text("สรุปรายการ", { size: 11, bold: true });
+  await r.text("รายการที่ต้องชำระ", { size: 11, bold: true });
   r.y -= 4;
 
   const filings = opts.filings as SectionFiling[];
@@ -1151,7 +1150,7 @@ async function drawCoverModern(
       amountText,
       M + CONTENT_W - cPadX - amtW,
       headerBaseline,
-      { size: amtSize, bold: true, color: COLOR_MONEY }
+      { size: amtSize, bold: true, color: COLOR_TEXT }
     );
 
     let cursor = headerBaseline - (metaLh + 1);

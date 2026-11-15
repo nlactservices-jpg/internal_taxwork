@@ -13,7 +13,7 @@ describe("report template (server renderer)", () => {
     expect(html).toContain("เลขประจำตัวผู้เสียภาษีอากร");
     expect(html).toContain("วันที่ออกรายงาน");
     expect(html).toContain("จัดทำโดย");
-    expect(html).toContain("รายละเอียดรายการภาษี");
+    expect(html).toContain("รายการที่ต้องชำระ");
   });
 
   it("renders one statement card per filing with formal labels", () => {
@@ -22,7 +22,7 @@ describe("report template (server renderer)", () => {
     expect(html).toContain("ภ.พ.30");
     expect(html).toContain("5,000.00");
     expect(html).toContain('<span class="unit"> บาท</span>');
-    expect(html).toContain("รายละเอียด");
+    expect(html).toContain("ภาษีมูลค่าเพิ่ม เดือน 7/69");
     expect(html).toContain("ช่องทางการชำระเงิน");
     expect(html).toContain("เลขที่บัญชี 164-3-84594-2");
     expect(html).toContain("พร้อมเพย์ 0810000000");
@@ -38,9 +38,9 @@ describe("report template (server renderer)", () => {
     expect(html).toMatch(/\.card \.amt\s*\{[^}]*line-height:\s*1\.1/);
     // 600 would resolve to the only bold face (700); the account must be 400.
     expect(html).toMatch(/\.acctno\s*\{[^}]*font-weight:\s*400/);
-    // Money is a single print-safe accent; it must not fall back to ink.
+    // The cover amount is ink; the payment page keeps the money accent.
+    expect(html).toMatch(/\.card \.amt\s*\{[^}]*color:\s*#17171c/);
     expect(html).toContain("--money: #1e40af");
-    expect(html).toMatch(/\.card \.amt\s*\{[^}]*color:\s*var\(--money/);
   });
 
   it("includes a dedicated payment page unless preview", () => {
