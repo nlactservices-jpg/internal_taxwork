@@ -10,19 +10,6 @@ export type NavLink = {
 
 export const navLinks: NavLink[] = [
   {
-    href: "/",
-    label: "หน้าแรก",
-    mobileLabel: "หน้าแรก",
-    description: "ภาพรวมและอัปโหลดไฟล์ด่วน",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path d="M3 10.5 12 3l9 7.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M5 9.5V21h14V9.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M9.5 21v-6h5v6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
     href: "/clients",
     label: "ลูกค้า",
     mobileLabel: "ลูกค้า",

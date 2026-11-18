@@ -11,8 +11,8 @@ export default function Sidebar() {
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Order: home, clients, files, reports, wht, tools, express-backup, contacts.
-  // Desktop shows 5 main links; mobile shows 4 (home, clients, files, reports).
+  // Order: clients, files, reports, wht, tools, express-backup, contacts, onboarding.
+  // Desktop shows 5 main links; mobile shows 4 (clients, files, reports, wht).
   const desktopLinks = navLinks.slice(0, 5);
   const desktopOverflow = navLinks.slice(5);
   const mobileLinks = navLinks.slice(0, 4);
@@ -50,7 +50,9 @@ export default function Sidebar() {
     <>
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-44 shrink-0 flex-col border-r border-neutral-200 bg-white p-4 md:flex print:hidden">
-        <div className="mb-6 text-sm font-bold">Taxwork</div>
+        <Link href="/clients" className="mb-6 block text-sm font-bold hover:text-blue-700">
+          Taxwork
+        </Link>
         {moreOpen && (
           <button
             aria-hidden

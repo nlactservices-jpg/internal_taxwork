@@ -4,6 +4,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { sql } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { generatePublicId } from "@/lib/ids";
+import { suggestClientCode } from "@/lib/client-avatar";
 import { appOrigin } from "@/lib/app-url";
 import { R2_BUCKET, signedUrl } from "@/lib/r2";
 import { sendEmail } from "@/lib/email/resend";
@@ -258,10 +259,14 @@ export async function createBookkeepingClient(
       if (sub.has_prev_accountant) notesParts.push(`สำนักบัญชีเดิม: ${sub.prev_accountant || "-"}`);
       if (sub.notes) notesParts.push(sub.notes);
 
+      const codeRows = (await sql`select avatar_text from clients where avatar_text is not null`) as {
+        avatar_text: string | null;
+      }[];
+      const clientCode = suggestClientCode(sub.name_th, codeRows.map((r) => r.avatar_text));
       const inserted = (await sql`
-        insert into clients (name, tax_id, email, phone, address, notes)
+        insert into clients (name, tax_id, email, phone, address, notes, avatar_text)
         values (${sub.name_th}, ${taxId}, ${sub.company_email || sub.contact_email}, ${sub.company_phone || sub.contact_phone},
-                ${composeAddress(sub)}, ${notesParts.join("\n") || null})
+                ${composeAddress(sub)}, ${notesParts.join("\n") || null}, ${clientCode || null})
         returning id
       `) as { id: string }[];
       clientId = inserted[0].id;

@@ -2,6 +2,11 @@
 
 import { sql } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import {
+  isValidClientCode,
+  normalizeClientCode,
+  suggestClientCode as suggestCode,
+} from "@/lib/client-avatar";
 import { buildUpdate, num } from "./db-helpers";
 
 export type Client = {
@@ -47,7 +52,14 @@ export type Shareholder = {
   notes: string | null;
 };
 
-export type ClientForm = { name: string; tax_id: string; email: string; phone: string; address: string };
+export type ClientForm = {
+  name: string;
+  tax_id: string;
+  email: string;
+  phone: string;
+  address: string;
+  avatar_text?: string;
+};
 export type CredentialForm = { label: string; username: string; password: string; portal_url: string; notes: string };
 export type ShareholderForm = {
   name: string;
@@ -88,10 +100,42 @@ export async function listCredentials(clientId: string): Promise<Credential[]> {
   return (await sql`select id, label, username, password from credentials where client_id=${clientId} order by label`) as Credential[];
 }
 
+export async function checkClientCodeAvailable(
+  code: string,
+  excludeId?: string
+): Promise<boolean> {
+  await requireUser();
+  const normalized = normalizeClientCode(code);
+  if (!isValidClientCode(normalized)) return false;
+  const rows = excludeId
+    ? await sql`select 1 from clients where upper(avatar_text)=${normalized} and id<>${excludeId} limit 1`
+    : await sql`select 1 from clients where upper(avatar_text)=${normalized} limit 1`;
+  return rows.length === 0;
+}
+
+export async function suggestClientCode(name: string): Promise<string> {
+  await requireUser();
+  const rows = (await sql`select avatar_text from clients where avatar_text is not null`) as {
+    avatar_text: string | null;
+  }[];
+  return suggestCode(name, rows.map((r) => r.avatar_text));
+}
+
 export async function createClient(form: ClientForm): Promise<void> {
   await requireUser();
-  await sql`insert into clients (name, tax_id, email, phone, address)
-    values (${form.name}, ${form.tax_id}, ${form.email}, ${form.phone}, ${form.address})`;
+  let code = normalizeClientCode(form.avatar_text);
+  if (!code) {
+    const rows = (await sql`select avatar_text from clients where avatar_text is not null`) as {
+      avatar_text: string | null;
+    }[];
+    code = suggestCode(form.name, rows.map((r) => r.avatar_text));
+  }
+  if (!isValidClientCode(code)) throw new Error("ตัวย่อลูกค้าไม่ถูกต้อง (A-Z 0-9 ไม่เกิน 4 ตัว)");
+  const taken = await sql`select 1 from clients where upper(avatar_text)=${code} limit 1`;
+  if (taken.length) throw new Error("ตัวย่อลูกค้านี้ถูกใช้แล้ว");
+
+  await sql`insert into clients (name, tax_id, email, phone, address, avatar_text)
+    values (${form.name}, ${form.tax_id}, ${form.email}, ${form.phone}, ${form.address}, ${code})`;
 }
 
 export async function getClientDetail(id: string): Promise<{
@@ -118,7 +162,15 @@ export async function getClientDetail(id: string): Promise<{
 
 export async function updateClient(id: string, edit: Record<string, string | null | undefined>): Promise<void> {
   await requireUser();
-  const { text, params } = buildUpdate("clients", id, edit as Record<string, unknown>, CLIENT_EDITABLE);
+  const patch = { ...edit };
+  if (typeof patch.avatar_text === "string") {
+    const code = normalizeClientCode(patch.avatar_text);
+    if (!isValidClientCode(code)) throw new Error("ตัวย่อลูกค้าไม่ถูกต้อง (A-Z 0-9 ไม่เกิน 4 ตัว)");
+    const taken = await sql`select 1 from clients where upper(avatar_text)=${code} and id<>${id} limit 1`;
+    if (taken.length) throw new Error("ตัวย่อลูกค้านี้ถูกใช้แล้ว");
+    patch.avatar_text = code;
+  }
+  const { text, params } = buildUpdate("clients", id, patch as Record<string, unknown>, CLIENT_EDITABLE);
   await sql.query(text, params);
 }
 

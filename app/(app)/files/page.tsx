@@ -2,7 +2,12 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { deleteFileRecord, listFiles, updateFileNote } from "@/lib/actions/files";
+import {
+  deleteFileRecord,
+  listDownloadedFileIds,
+  listFiles,
+  updateFileNote,
+} from "@/lib/actions/files";
 import CopyButton from "@/components/copy-button";
 import CreatableSelect from "@/components/creatable-select";
 import { downloadStoredFile } from "@/lib/download";
@@ -90,6 +95,8 @@ export default function FilesPage() {
   const [filterYear, setFilterYear] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
   const [filterUser, setFilterUser] = useState("");
+  const [filterUndownloaded, setFilterUndownloaded] = useState(false);
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNote, setEditNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -104,11 +111,13 @@ export default function FilesPage() {
     () => [...new Set(files.map((f) => f.note).filter((n): n is string => !!n))].sort(),
     [files]
   );
-  const hasFilter = filterYear !== "" || filterMonth !== "" || filterUser !== "";
-  const activeFilterCount = [filterYear, filterMonth, filterUser].filter(Boolean).length;
+  const hasFilter = filterYear !== "" || filterMonth !== "" || filterUser !== "" || filterUndownloaded;
+  const activeFilterCount = [filterYear, filterMonth, filterUser].filter(Boolean).length + (filterUndownloaded ? 1 : 0);
 
   const load = useCallback(async () => {
-    setFiles(await listFiles());
+    const [rows, ids] = await Promise.all([listFiles(), listDownloadedFileIds()]);
+    setFiles(rows);
+    setDownloadedIds(new Set(ids));
     setLoading(false);
   }, []);
 
@@ -165,6 +174,7 @@ export default function FilesPage() {
         storagePath: file.storage_path,
         fileName: file.file_name,
       });
+      setDownloadedIds((prev) => new Set(prev).add(file.id));
     } catch {
       push({ type: "error", message: "เปิดไฟล์ไม่สำเร็จ" });
     }
@@ -174,6 +184,7 @@ export default function FilesPage() {
     setFilterYear("");
     setFilterMonth("");
     setFilterUser("");
+    setFilterUndownloaded(false);
   }
 
   const filtered = files.filter((f) => {
@@ -188,6 +199,7 @@ export default function FilesPage() {
         return false;
     }
     if (filterUser && f.uploaded_by !== filterUser) return false;
+    if (filterUndownloaded && downloadedIds.has(f.id)) return false;
     const d = new Date(f.uploaded_at);
     if (filterYear && d.getFullYear() !== Number(filterYear)) return false;
     if (filterMonth && d.getMonth() + 1 !== Number(filterMonth)) return false;
@@ -331,6 +343,15 @@ export default function FilesPage() {
                 ))}
               </select>
             </div>
+            <button
+              type="button"
+              className={`btn ${filterUndownloaded ? "border-blue-400 text-blue-700" : ""}`}
+              onClick={() => setFilterUndownloaded((v) => !v)}
+              aria-pressed={filterUndownloaded}
+              title="แสดงเฉพาะไฟล์ที่ยังไม่ได้ดาวน์โหลด"
+            >
+              เฉพาะยังไม่โหลด
+            </button>
             {hasFilter && (
               <button type="button" className="btn" onClick={clearFilters}>
                 ล้างตัวกรอง
@@ -367,6 +388,15 @@ export default function FilesPage() {
                 onClick={() => setFilterUser("")}
               >
                 {filterUser} <span className="text-neutral-400">×</span>
+              </button>
+            )}
+            {filterUndownloaded && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 hover:bg-amber-100"
+                onClick={() => setFilterUndownloaded(false)}
+              >
+                ยังไม่โหลด <span className="text-amber-400">×</span>
               </button>
             )}
           </div>
@@ -447,9 +477,14 @@ export default function FilesPage() {
                                 >
                                   {f.file_name}
                                 </button>
-                                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
-                                  <span>{fmtSize(f.size_bytes)}</span>
-                                  {f.note && (
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
+                                    <span>{fmtSize(f.size_bytes)}</span>
+                                    {!downloadedIds.has(f.id) && (
+                                      <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                        ยังไม่โหลด
+                                      </span>
+                                    )}
+                                    {f.note && (
                                     <>
                                       <span className="text-neutral-300">·</span>
                                       <span className="truncate">หมายเหตุ: {f.note}</span>
@@ -480,8 +515,14 @@ export default function FilesPage() {
                                   />
                                 ) : (
                                   <span className="inline-flex items-center gap-1.5">
-                                    <button type="button" className="btn px-2 py-1 text-xs" onClick={() => download(f)}>
-                                      ดาวน์โหลด
+                                    <button
+                                      type="button"
+                                      className={`px-2 py-1 text-xs ${
+                                        downloadedIds.has(f.id) ? "btn" : "btn-primary"
+                                      }`}
+                                      onClick={() => download(f)}
+                                    >
+                                      {downloadedIds.has(f.id) ? "โหลดอีกครั้ง" : "ดาวน์โหลด"}
                                     </button>
                                     <button
                                       type="button"

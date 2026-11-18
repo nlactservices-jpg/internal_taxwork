@@ -116,3 +116,39 @@ export function resolveInitials(
 ): string {
   return normalizeInitials(abbreviation) || clientInitials(name);
 }
+
+/** Normalize a stored/typed client code to uppercase A-Z0-9, max 4 chars. */
+export function normalizeClientCode(raw: string | null | undefined): string {
+  return normalizeInitials(raw);
+}
+
+/** A client code is 1-4 uppercase letters/digits. */
+export function isValidClientCode(code: string): boolean {
+  return /^[A-Z0-9]{1,4}$/.test(code);
+}
+
+/**
+ * Suggest a unique client code. Prefer Latin initials, then add a digit, then
+ * fall back to C001/C002 so Thai-only names still get a usable code.
+ */
+export function suggestClientCode(
+  name: string,
+  taken: Iterable<string | null | undefined> = []
+): string {
+  const used = new Set(
+    [...taken].map((v) => normalizeClientCode(v)).filter(Boolean)
+  );
+  const base = clientInitials(name);
+  if (base && !used.has(base)) return base;
+  if (base) {
+    for (let i = 1; i <= 9; i++) {
+      const candidate = `${base}${i}`.slice(0, 4).toUpperCase();
+      if (isValidClientCode(candidate) && !used.has(candidate)) return candidate;
+    }
+  }
+  for (let i = 1; i <= 9999; i++) {
+    const candidate = `C${String(i).padStart(3, "0")}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return "";
+}

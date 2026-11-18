@@ -40,8 +40,7 @@ Single-user tool (the owner) used daily to:
 app/
   login/page.tsx              Email+password sign-in (better-auth)
    password/page.tsx           Change password (signed-in users)
-  (app)/page.tsx              Home landing: quick upload, own/team upload history with download progress
-  (app)/upload-history.tsx    Home history client component: own/team split, direct download, new badges
+  (app)/page.tsx              Redirect stub to /clients (no home UI)
   (app)/layout.tsx            Shell: desktop sidebar / mobile bottom nav
   (app)/clients/page.tsx      Client list: sortable, copy icons, expandable credential rows
   (app)/clients/[id]/page.tsx Client detail: edit info, credentials CRUD, files, tasks, delete
@@ -174,7 +173,7 @@ RESEND_API_KEY=<Resend API key> (server-only)
 REPORT_FROM_EMAIL=Taxwork Account <reports@taxworkaccount.com> (verified sender)
 ```
 
- Login redirects to `/` (home landing) after sign-in. Dashboard/tasks/templates are hidden from nav but still routable.
+ Login redirects to `/clients` after sign-in; `/` redirects there too. The Files tab keeps the “ยังไม่โหลด” download-status filter. Dashboard/tasks/templates are hidden from nav but still routable.
 
 ⚠️ If login breaks on production, check that Vercel env vars (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`) match the current Neon project — a stale `DATABASE_URL` is the most likely cause.
 

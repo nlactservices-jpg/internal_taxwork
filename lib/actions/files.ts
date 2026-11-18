@@ -53,7 +53,7 @@ export async function listFiles(): Promise<FileRow[]> {
   return rows.map(toRow);
 }
 
-/** Email → display name for staff uploaders (used on the home page). */
+/** Email → display name for staff uploaders (used by file lists). */
 export async function listUploaderNames(): Promise<Record<string, string>> {
   await requireUser();
   const rows = (await sql`select email, name from "user"`) as {
@@ -107,7 +107,7 @@ export async function listDownloadedFileIds(): Promise<string[]> {
   try {
     return await listDownloadedFileIdsForUser(user.email);
   } catch {
-    // The migration may not be applied yet; the landing page still works.
+    // The migration may not be applied yet; the file list still works.
     return [];
   }
 }

@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  * Same-origin inline preview proxy for a stored file. Keeps private R2 objects
  * behind the app session and lets PDFs/images render in a browser tab instead
  * of being force-downloaded. Previews are intentionally not recorded as
- * downloads (the home page's "ยังไม่โหลด" badge only clears on a real save).
+ * downloads (the Files page's "ยังไม่โหลด" filter only clears on a real save).
  */
 export async function GET(request: NextRequest) {
   const user = await requireUserApi();

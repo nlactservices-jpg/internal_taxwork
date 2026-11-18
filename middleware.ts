@@ -34,9 +34,11 @@ export function middleware(request: NextRequest) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-  if (hasSession && pathname === "/login") {
+  // Clients is the landing page after sign-in; `/` is kept as a redirect stub
+  // for bookmarks and old links.
+  if (hasSession && (pathname === "/login" || pathname === "/")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/clients";
     return NextResponse.redirect(url);
   }
 

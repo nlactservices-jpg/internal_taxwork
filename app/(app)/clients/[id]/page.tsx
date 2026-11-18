@@ -21,11 +21,13 @@ import FileSection from "@/components/file-section";
 import CopyButton from "@/components/copy-button";
 import Badge from "@/components/badge";
 import ClientAvatar from "@/components/client-avatar";
+import ClientCodeBadge from "@/components/client-code-badge";
+import Modal from "@/components/modal";
 import EmptyState from "@/components/empty-state";
 import InlineConfirm from "@/components/inline-confirm";
 import PasswordValue from "@/components/password-value";
 import { ToastStack, useToasts } from "@/components/toast";
-import { AVATAR_PALETTE, clientInitials, normalizeHex } from "@/lib/client-avatar";
+import { AVATAR_PALETTE, normalizeClientCode, normalizeHex } from "@/lib/client-avatar";
 
 type Client = {
   id: string;
@@ -293,15 +295,23 @@ export default function ClientDetailPage() {
               size="lg"
             />
             <div className="min-w-0">
-              <h1 className="break-words text-xl font-semibold leading-snug">{client.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="break-words text-xl font-semibold leading-snug">{client.name}</h1>
+                <ClientCodeBadge code={client.avatar_text} />
+              </div>
               <p className="mt-1 text-sm text-neutral-500">
                 {client.tax_id ? `เลขภาษี ${client.tax_id}` : "ยังไม่มีเลขผู้เสียภาษี"}
               </p>
             </div>
           </div>
-          <Badge tone={client.status === "active" ? "success" : "neutral"}>
-            {client.status === "active" ? "ใช้งาน" : "เก็บถาวร"}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={client.status === "active" ? "success" : "neutral"}>
+              {client.status === "active" ? "ใช้งาน" : "เก็บถาวร"}
+            </Badge>
+            <button className="btn-primary px-2 py-1 text-xs" onClick={() => setShowEditForm(true)}>
+              แก้ไข
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -336,22 +346,57 @@ export default function ClientDetailPage() {
         </div>
       </section>
 
-      <section className="card">
+      <nav className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-b border-neutral-200 bg-[#fafafa]/95 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded sm:border">
+        {[
+          { href: "#overview", label: "ภาพรวม" },
+          { href: "#credentials", label: "ข้อมูลเข้าระบบ" },
+          { href: "#shareholders", label: "ผู้ถือหุ้น" },
+          { href: "#files", label: "ไฟล์" },
+          { href: "#tasks", label: "งาน" },
+          { href: `/clients/${id}/notes`, label: "โน้ต" },
+        ].map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            className="whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+
+      <section id="overview" className="card scroll-mt-16">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="font-medium">ภาพรวม</h2>
-          <button className="btn" onClick={() => setShowEditForm(!showEditForm)}>
-            {showEditForm ? "ปิด" : "แก้ไข"}
+          <button className="btn" onClick={() => setShowEditForm(true)}>
+            แก้ไข
           </button>
         </div>
-        {!showEditForm ? (
-          <div>
-            <ValueRow label="โทรศัพท์" value={client.phone} href={client.phone ? `tel:${client.phone}` : undefined} />
-            <ValueRow label="อีเมล" value={client.email} href={client.email ? `mailto:${client.email}` : undefined} />
-            <ValueRow label="ที่อยู่" value={client.address} />
-            <ValueRow label="หมายเหตุ" value={client.notes} />
-            <ValueRow label="กรรมการ" value={director?.name} />
-          </div>
-        ) : (
+        <div>
+          <ValueRow label="รหัสลูกค้า" value={client.avatar_text || "—"} />
+          <ValueRow label="โทรศัพท์" value={client.phone} href={client.phone ? `tel:${client.phone}` : undefined} />
+          <ValueRow label="อีเมล" value={client.email} href={client.email ? `mailto:${client.email}` : undefined} />
+          <ValueRow label="ที่อยู่" value={client.address} />
+          <ValueRow label="หมายเหตุ" value={client.notes} />
+          <ValueRow label="กรรมการ" value={director?.name} />
+        </div>
+
+        <Modal
+          open={showEditForm}
+          onClose={() => setShowEditForm(false)}
+          title="แก้ไขข้อมูลลูกค้า"
+          size="lg"
+          footer={
+            <>
+              <button className="btn" onClick={() => setShowEditForm(false)} disabled={savingClient}>
+                ยกเลิก
+              </button>
+              <button className="btn-primary" onClick={saveClient} disabled={savingClient}>
+                {savingClient ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+              </button>
+            </>
+          }
+        >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded border border-neutral-200 bg-neutral-50 p-3 sm:col-span-2">
               <div className="mb-2 text-xs font-semibold text-neutral-500">ไอคอนลูกค้า</div>
@@ -364,17 +409,14 @@ export default function ClientDetailPage() {
                 />
                 <div className="flex-1 space-y-2">
                   <div>
-                    <label className="label">ตัวย่อ (ไม่เกิน 4 ตัวอักษร)</label>
+                    <label className="label">รหัสลูกค้า (A-Z 0-9 ไม่เกิน 4 ตัว)</label>
                     <input
-                      className="input max-w-[9rem]"
+                      className="input max-w-[9rem] uppercase"
                       maxLength={4}
-                      placeholder={clientInitials(edit.name ?? client.name) || "DTN"}
+                      placeholder="DTN"
                       value={edit.avatar_text ?? ""}
                       onChange={(e) =>
-                        setEdit({
-                          ...edit,
-                          avatar_text: e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
-                        })
+                        setEdit({ ...edit, avatar_text: normalizeClientCode(e.target.value) })
                       }
                     />
                   </div>
@@ -443,15 +485,12 @@ export default function ClientDetailPage() {
               <label className="label">หมายเหตุ</label>
               <textarea className="input" rows={2} value={edit.notes ?? ""} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} />
             </div>
-            <button className="btn-primary w-fit sm:col-span-2" onClick={saveClient} disabled={savingClient}>
-              {savingClient ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
-            </button>
           </div>
-        )}
+        </Modal>
       </section>
 
       {/* Credentials */}
-      <section className="card">
+      <section id="credentials" className="card scroll-mt-16">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">ข้อมูลเข้าระบบ</h2>
           <button
@@ -573,7 +612,7 @@ export default function ClientDetailPage() {
       </section>
 
       {/* Shareholders */}
-      <section className="card">
+      <section id="shareholders" className="card scroll-mt-16">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">ผู้ถือหุ้น</h2>
           <button className="btn" onClick={() => setShowShForm(!showShForm)}>
@@ -752,10 +791,12 @@ export default function ClientDetailPage() {
       </section>
 
       {/* Files */}
-      <FileSection clientId={id} onChanged={load} />
+      <div id="files" className="scroll-mt-16">
+        <FileSection clientId={id} onChanged={load} />
+      </div>
 
       {/* Tasks */}
-      <section className="card">
+      <section id="tasks" className="card scroll-mt-16">
         <h2 className="mb-2 font-medium">งานของลูกค้านี้</h2>
         <div className="space-y-2 md:hidden">
           {tasks.map((t) => (

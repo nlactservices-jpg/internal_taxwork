@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   clientInitials,
   contrastText,
+  isValidClientCode,
+  normalizeClientCode,
   normalizeHex,
   normalizeInitials,
   resolveInitials,
+  suggestClientCode,
 } from "@/lib/client-avatar";
 
 describe("normalizeInitials", () => {
@@ -70,5 +73,27 @@ describe("resolveInitials", () => {
 
   it("falls back to the name when no abbreviation is set", () => {
     expect(resolveInitials("Drive Terminal Co., Ltd.", null)).toBe("DT");
+  });
+});
+
+describe("client codes", () => {
+  it("normalizes typed codes to uppercase A-Z0-9 max 4", () => {
+    expect(normalizeClientCode("dtn-1")).toBe("DTN1");
+    expect(normalizeClientCode("ABCDE")).toBe("ABCD");
+  });
+
+  it("validates the 1-4 uppercase alphanumeric format", () => {
+    expect(isValidClientCode("DTN")).toBe(true);
+    expect(isValidClientCode("C001")).toBe(true);
+    expect(isValidClientCode("")).toBe(false);
+    expect(isValidClientCode("ABCDE")).toBe(false);
+    expect(isValidClientCode("D-T")).toBe(false);
+  });
+
+  it("suggests initials first, then a digit, then a sequential code", () => {
+    expect(suggestClientCode("Drive Terminal Co., Ltd.")).toBe("DT");
+    expect(suggestClientCode("Drive Terminal Co., Ltd.", ["DT"])).toBe("DT1");
+    expect(suggestClientCode("บริษัท ไดฟ์ เทอร์มินอล จำกัด")).toBe("C001");
+    expect(suggestClientCode("บริษัท ไดฟ์ เทอร์มินอล จำกัด", ["C001", "C002"])).toBe("C003");
   });
 });

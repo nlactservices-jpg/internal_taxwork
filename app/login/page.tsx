@@ -32,7 +32,7 @@ export default function LoginPage() {
         password,
       });
       if (!signInError) {
-        router.push("/");
+        router.push("/clients");
         router.refresh();
         return;
       }
