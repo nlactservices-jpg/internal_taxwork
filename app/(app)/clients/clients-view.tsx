@@ -6,8 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   checkClientCodeAvailable,
   createClient,
+  listCredentials,
   updateClient,
   type Client,
+  type Credential,
 } from "@/lib/actions/clients";
 import {
   isValidClientCode,
@@ -17,6 +19,7 @@ import {
 import { useClientFavorites } from "@/lib/use-client-favorites";
 import ClientAvatar from "@/components/client-avatar";
 import ClientCodeBadge from "@/components/client-code-badge";
+import ClientInfoDrawer from "@/components/client-info-drawer";
 import Badge from "@/components/badge";
 import SearchInput from "@/components/search-input";
 import EmptyState from "@/components/empty-state";
@@ -69,6 +72,10 @@ export default function ClientsView({ initialClients }: { initialClients: Client
   const [formError, setFormError] = useState("");
   const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
+  const [infoClient, setInfoClient] = useState<Client | null>(null);
+  const [infoCredentials, setInfoCredentials] = useState<Credential[]>([]);
+  const [infoLoading, setInfoLoading] = useState(false);
+  const [infoError, setInfoError] = useState("");
 
   useEffect(() => setClients(initialClients), [initialClients]);
   useEffect(() => setSearchText(q), [q]);
@@ -116,6 +123,22 @@ export default function ClientsView({ initialClients }: { initialClients: Client
     }, 300);
     return () => window.clearTimeout(timer);
   }, [form.avatar_text, editingId, showForm]);
+
+  const infoId = infoClient?.id;
+  useEffect(() => {
+    if (!infoId) return;
+    let cancelled = false;
+    setInfoLoading(true);
+    setInfoCredentials([]);
+    setInfoError("");
+    listCredentials(infoId)
+      .then((rows) => !cancelled && setInfoCredentials(rows))
+      .catch(() => !cancelled && setInfoError("โหลดข้อมูลเข้าระบบไม่สำเร็จ"))
+      .finally(() => !cancelled && setInfoLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [infoId]);
 
   const filtered = useMemo(() => {
     let rows = [...clients];
@@ -166,6 +189,16 @@ export default function ClientsView({ initialClients }: { initialClients: Client
     setShowForm(false);
     setEditingId(null);
     setFormError("");
+  }
+
+  function openInfo(client: Client) {
+    setInfoClient(client);
+  }
+
+  function closeInfo() {
+    setInfoClient(null);
+    setInfoCredentials([]);
+    setInfoError("");
   }
 
   async function save(e: React.FormEvent) {
@@ -358,6 +391,13 @@ export default function ClientsView({ initialClients }: { initialClients: Client
                     <td><Badge tone={statusTone(c.status)}>{statusLabel(c.status)}</Badge></td>
                     <td className="text-right">
                       <span className="inline-flex items-center gap-1.5">
+                        <button
+                          className="btn px-2 py-1 text-xs"
+                          onClick={() => openInfo(c)}
+                          title="ดูข้อมูลสำคัญ เช่น เลขภาษี ที่อยู่ และข้อมูลเข้าระบบ"
+                        >
+                          ข้อมูล
+                        </button>
                         <Link className="btn px-2 py-1 text-xs" href={`/clients/${c.id}`}>เปิด</Link>
                         <button className="btn px-2 py-1 text-xs" onClick={() => openEdit(c)}>แก้ไข</button>
                       </span>
@@ -397,9 +437,10 @@ export default function ClientsView({ initialClients }: { initialClients: Client
                   {c.phone && <a href={`tel:${c.phone}`} className="text-blue-600">{c.phone}</a>}
                   {c.email && <a href={`mailto:${c.email}`} className="truncate text-blue-600">{c.email}</a>}
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <Link className="btn flex-1 text-center" href={`/clients/${c.id}`}>เปิด</Link>
-                  <button className="btn flex-1" onClick={() => openEdit(c)}>แก้ไข</button>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button className="btn text-xs" onClick={() => openInfo(c)}>ข้อมูล</button>
+                  <Link className="btn text-center text-xs" href={`/clients/${c.id}`}>เปิด</Link>
+                  <button className="btn text-xs" onClick={() => openEdit(c)}>แก้ไข</button>
                 </div>
               </div>
             ))}
@@ -488,6 +529,14 @@ export default function ClientsView({ initialClients }: { initialClients: Client
           </p>
         </form>
       </Modal>
+
+      <ClientInfoDrawer
+        client={infoClient}
+        credentials={infoCredentials}
+        loading={infoLoading}
+        error={infoError}
+        onClose={closeInfo}
+      />
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>

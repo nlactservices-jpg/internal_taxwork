@@ -98,7 +98,7 @@ export async function listClients(): Promise<Client[]> {
 
 export async function listCredentials(clientId: string): Promise<Credential[]> {
   await requireUser();
-  return (await sql`select id, label, username, password from credentials where client_id=${clientId} order by label`) as Credential[];
+  return (await sql`select id, label, username, password, portal_url, notes from credentials where client_id=${clientId} order by label`) as Credential[];
 }
 
 export async function checkClientCodeAvailable(
