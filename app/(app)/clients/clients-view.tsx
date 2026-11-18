@@ -153,6 +153,9 @@ export default function ClientsView({ initialClients }: { initialClients: Client
     if (favOnly) rows = rows.filter((c) => favorites.includes(c.id));
 
     rows.sort((a, b) => {
+      const fa = favorites.includes(a.id) ? 0 : 1;
+      const fb = favorites.includes(b.id) ? 0 : 1;
+      if (fa !== fb) return fa - fb;
       let cmp = 0;
       if (sort === "created_at") {
         cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -353,7 +356,15 @@ export default function ClientsView({ initialClients }: { initialClients: Client
               </thead>
               <tbody>
                 {filtered.map((c) => (
-                  <tr key={c.id} className="hover:bg-neutral-50">
+                  <tr
+                    key={c.id}
+                    className="cursor-pointer hover:bg-neutral-50"
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.closest("a,button,input,select,textarea")) return;
+                      openInfo(c);
+                    }}
+                  >
                     <td>
                       <button
                         type="button"
@@ -370,9 +381,14 @@ export default function ClientsView({ initialClients }: { initialClients: Client
                         <ClientAvatar name={c.name} text={c.avatar_text} color={c.avatar_color} size="sm" />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Link href={`/clients/${c.id}`} className="font-medium text-blue-700 hover:underline">
+                            <button
+                              type="button"
+                              className="font-medium text-blue-700 hover:underline"
+                              onClick={() => openInfo(c)}
+                              title="คลิกเพื่อดูข้อมูลลูกค้า"
+                            >
                               {c.name}
-                            </Link>
+                            </button>
                             <ClientCodeBadge code={c.avatar_text} />
                           </div>
                           <div className="mt-0.5 text-xs text-neutral-500">
@@ -410,12 +426,27 @@ export default function ClientsView({ initialClients }: { initialClients: Client
 
           <div className="space-y-3 md:hidden">
             {filtered.map((c) => (
-              <div key={c.id} className="rounded-xl border border-neutral-200 bg-white p-4">
+              <div
+                key={c.id}
+                className="cursor-pointer rounded-xl border border-neutral-200 bg-white p-4"
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest("a,button")) return;
+                  openInfo(c);
+                }}
+              >
                 <div className="flex items-start gap-3">
                   <ClientAvatar name={c.name} text={c.avatar_text} color={c.avatar_color} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/clients/${c.id}`} className="font-medium text-blue-700">{c.name}</Link>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-blue-700"
+                        onClick={() => openInfo(c)}
+                        title="คลิกเพื่อดูข้อมูลลูกค้า"
+                      >
+                        {c.name}
+                      </button>
                       <ClientCodeBadge code={c.avatar_text} />
                     </div>
                     <p className="mt-0.5 text-xs text-neutral-500">

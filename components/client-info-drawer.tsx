@@ -20,7 +20,7 @@ function InfoRow({
 }) {
   const text = value?.trim() || "—";
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-neutral-100 py-2 last:border-b-0">
+    <div className="flex items-start justify-between gap-3 border-b border-neutral-100 py-1.5 last:border-b-0">
       <span className="shrink-0 text-xs font-medium text-neutral-500">{label}</span>
       <span className="flex min-w-0 items-center justify-end gap-1 text-right text-sm text-neutral-800">
         <span className="min-w-0 break-words">{text}</span>
@@ -61,6 +61,7 @@ export default function ClientInfoDrawer({
         </>
       }
     >
+      <div className="grid gap-5 sm:grid-cols-2">
       <section>
         <div className="flex items-start gap-3">
           <ClientAvatar
@@ -94,8 +95,10 @@ export default function ClientInfoDrawer({
         </div>
       </section>
 
-      <section className="mt-6">
-        <h3 className="mb-2 text-sm font-semibold text-neutral-800">ข้อมูลเข้าระบบ</h3>
+      <section>
+        <h3 className="mb-2 border-b border-neutral-200 pb-1.5 text-sm font-semibold text-neutral-800">
+          ข้อมูลเข้าระบบ
+        </h3>
         {loading ? (
           <div className="space-y-2">
             {[0, 1].map((i) => (
@@ -109,9 +112,9 @@ export default function ClientInfoDrawer({
         ) : credentials.length === 0 ? (
           <EmptyState title="ยังไม่มีข้อมูลเข้าระบบ" hint="เพิ่มข้อมูลเข้าระบบได้ที่หน้าลูกค้า" />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {credentials.map((cred) => (
-              <div key={cred.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div key={cred.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h4 className="text-sm font-medium text-neutral-800">{cred.label}</h4>
                   {cred.portal_url && /^https?:\/\//i.test(cred.portal_url) && (
@@ -151,6 +154,7 @@ export default function ClientInfoDrawer({
           </div>
         )}
       </section>
+      </div>
     </Drawer>
   );
 }

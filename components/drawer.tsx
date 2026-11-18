@@ -82,7 +82,7 @@ export default function Drawer({
       />
       <div
         ref={panelRef}
-        className="absolute inset-x-0 bottom-0 flex max-h-[90dvh] w-full animate-fade-in flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md sm:rounded-none"
+        className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] w-full animate-fade-in flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-3xl sm:rounded-none"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-5 py-4">
           <h2 className="text-base font-semibold text-neutral-900">{title}</h2>
