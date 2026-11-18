@@ -21,6 +21,11 @@ export default function Modal({
   size?: "md" | "lg";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -31,7 +36,7 @@ export default function Modal({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panelRef.current) return;
@@ -50,7 +55,12 @@ export default function Modal({
 
     document.addEventListener("keydown", onKeyDown);
     const timer = window.setTimeout(() => {
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      const panel = panelRef.current;
+      if (!panel) return;
+      const field = panel.querySelector<HTMLElement>(
+        'input:not([type="hidden"]),select,textarea'
+      );
+      (field ?? panel.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     }, 0);
 
     return () => {
@@ -59,7 +69,7 @@ export default function Modal({
       window.clearTimeout(timer);
       previous?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

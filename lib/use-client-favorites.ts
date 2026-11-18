@@ -10,18 +10,26 @@ import { useCallback, useEffect, useState } from "react";
 export const CLIENT_FAVORITES_STORAGE_KEY = "clients.favorites";
 
 export function useClientFavorites() {
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CLIENT_FAVORITES_STORAGE_KEY) ?? "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [onlyFav, setOnlyFav] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(CLIENT_FAVORITES_STORAGE_KEY) ?? "[]");
+      if (Array.isArray(stored)) {
+        setFavorites(stored.filter((id): id is string => typeof id === "string"));
+      }
+    } catch {
+      // ignore malformed storage
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem(CLIENT_FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
-  }, [favorites]);
+  }, [favorites, hydrated]);
 
   const toggleFav = useCallback((id: string) => {
     setFavorites((prev) =>

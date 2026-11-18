@@ -7,6 +7,7 @@ import {
   normalizeClientCode,
   suggestClientCode as suggestCode,
 } from "@/lib/client-avatar";
+import { reportExportFileName } from "@/lib/report-format";
 import { buildUpdate, num } from "./db-helpers";
 
 export type Client = {
@@ -162,6 +163,9 @@ export async function getClientDetail(id: string): Promise<{
 
 export async function updateClient(id: string, edit: Record<string, string | null | undefined>): Promise<void> {
   await requireUser();
+  const before = (await sql`select avatar_text from clients where id=${id}`) as {
+    avatar_text: string | null;
+  }[];
   const patch = { ...edit };
   if (typeof patch.avatar_text === "string") {
     const code = normalizeClientCode(patch.avatar_text);
@@ -172,6 +176,33 @@ export async function updateClient(id: string, edit: Record<string, string | nul
   }
   const { text, params } = buildUpdate("clients", id, patch as Record<string, unknown>, CLIENT_EDITABLE);
   await sql.query(text, params);
+
+  if (patch.avatar_text && before[0]?.avatar_text !== patch.avatar_text) {
+    const rows = (await sql`
+      select f.id, c.name, c.avatar_text, r.period_label, r.label, r.seq
+      from files f
+      join monthly_reports r on r.id=f.report_id
+      join clients c on c.id=f.client_id
+      where f.client_id=${id}
+    `) as {
+      id: string;
+      name: string;
+      avatar_text: string | null;
+      period_label: string;
+      label: string | null;
+      seq: number | null;
+    }[];
+    for (const row of rows) {
+      const fileName = reportExportFileName({
+        periodLabel: row.period_label,
+        clientName: row.name,
+        avatarText: row.avatar_text,
+        reportLabel: row.label,
+        seq: row.seq,
+      });
+      await sql`update files set file_name=${fileName} where id=${row.id}`;
+    }
+  }
 }
 
 export async function deleteClient(id: string): Promise<void> {

@@ -64,7 +64,7 @@ import {
   type ReportFiling,
 } from "@/lib/report-pdf";
 import { thaiBahtText } from "@/lib/thai-baht-text";
-import { maskEmail } from "@/lib/report-format";
+import { maskEmail, reportExportFileName } from "@/lib/report-format";
 import { downloadStoredFile } from "@/lib/download";
 import { ToastStack, useToasts } from "@/components/toast";
 import ClientAvatar from "@/components/client-avatar";
@@ -1699,14 +1699,20 @@ export default function ReportsPage() {
 
     const seq = activeReport?.seq ?? 1;
     const publicId = activeReport?.public_id ?? String(Date.now());
-    const roundTag = `-ครั้งที่${seq}`;
     const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+    const fileName = reportExportFileName({
+      periodLabel: period,
+      clientName: selectedClient.name,
+      avatarText: selectedClient.avatar_text,
+      reportLabel: activeReport?.label,
+      seq,
+    });
 
     if (download) {
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
-      a.download = `รายงานภาษี-${selectedClient.name}-${period}${roundTag}.pdf`;
+      a.download = fileName;
       a.click();
       URL.revokeObjectURL(dlUrl);
     }
@@ -1732,7 +1738,7 @@ export default function ReportsPage() {
       clientId,
       activeReportId,
       path,
-      `รายงานภาษี ${periodToThai(period)} ${activeReport?.label ?? ""}.pdf`.trim(),
+      fileName,
       blob.size
     );
 

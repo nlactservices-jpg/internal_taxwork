@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   addCredential as addCredentialAction,
   addShareholder as addShareholderAction,
+  checkClientCodeAvailable,
   deleteClient as deleteClientAction,
   deleteCredential as deleteCredentialAction,
   deleteShareholder as deleteShareholderAction,
@@ -27,7 +28,12 @@ import EmptyState from "@/components/empty-state";
 import InlineConfirm from "@/components/inline-confirm";
 import PasswordValue from "@/components/password-value";
 import { ToastStack, useToasts } from "@/components/toast";
-import { AVATAR_PALETTE, normalizeClientCode, normalizeHex } from "@/lib/client-avatar";
+import {
+  AVATAR_PALETTE,
+  isValidClientCode,
+  normalizeClientCode,
+  normalizeHex,
+} from "@/lib/client-avatar";
 
 type Client = {
   id: string;
@@ -115,6 +121,9 @@ function ValueRow({
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab") ?? "overview";
   const [client, setClient] = useState<Client | null>(null);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
@@ -131,7 +140,16 @@ export default function ClientDetailPage() {
   const [confirmingCredId, setConfirmingCredId] = useState<string | null>(null);
   const [confirmingShId, setConfirmingShId] = useState<string | null>(null);
   const [savingClient, setSavingClient] = useState(false);
+  const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
   const { toasts, push, dismiss } = useToasts();
+
+  function setTab(next: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "overview") params.delete("tab");
+    else params.set("tab", next);
+    const query = params.toString();
+    router.replace(`/clients/${id}${query ? `?${query}` : ""}`, { scroll: false });
+  }
 
   const load = useCallback(async () => {
     const d = await getClientDetail(id);
@@ -158,13 +176,36 @@ export default function ClientDetailPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const code = edit.avatar_text ?? "";
+    if (!showEditForm || !isValidClientCode(code)) {
+      setCodeAvailable(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      checkClientCodeAvailable(code, id)
+        .then((ok) => !cancelled && setCodeAvailable(ok))
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [edit.avatar_text, showEditForm, id]);
+
   async function saveClient() {
     if (savingClient) return;
+    const code = (edit.avatar_text ?? "").trim() || client?.avatar_text || "";
+    if (!isValidClientCode(code) || codeAvailable === false) {
+      push({ type: "error", message: "รหัสลูกค้าไม่ถูกต้องหรือถูกใช้แล้ว" });
+      return;
+    }
     setSavingClient(true);
     try {
       const payload = {
         ...edit,
-        avatar_text: (edit.avatar_text ?? "").trim() || null,
+        avatar_text: code,
         avatar_color: edit.avatar_color ? edit.avatar_color : null,
       };
       await updateClient(id, payload);
@@ -346,25 +387,37 @@ export default function ClientDetailPage() {
         </div>
       </section>
 
-      <nav className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-b border-neutral-200 bg-[#fafafa]/95 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded sm:border">
+      <nav className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto border-b border-neutral-200 bg-[#fafafa]/95 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded sm:border" aria-label="ส่วนของลูกค้า">
         {[
-          { href: "#overview", label: "ภาพรวม" },
-          { href: "#credentials", label: "ข้อมูลเข้าระบบ" },
-          { href: "#shareholders", label: "ผู้ถือหุ้น" },
-          { href: "#files", label: "ไฟล์" },
-          { href: "#tasks", label: "งาน" },
-          { href: `/clients/${id}/notes`, label: "โน้ต" },
+          { key: "overview", label: "ภาพรวม" },
+          { key: "credentials", label: "ข้อมูลเข้าระบบ" },
+          { key: "shareholders", label: "ผู้ถือหุ้น" },
+          { key: "files", label: "ไฟล์" },
+          { key: "tasks", label: "งาน" },
         ].map((item) => (
-          <a
-            key={item.href}
-            href={item.href}
-            className="whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setTab(item.key)}
+            aria-current={tab === item.key ? "page" : undefined}
+            className={`whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === item.key
+                ? "bg-blue-600 text-white"
+                : "text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+            }`}
           >
             {item.label}
-          </a>
+          </button>
         ))}
+        <Link
+          href={`/clients/${id}/notes`}
+          className="whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200/70 hover:text-neutral-900"
+        >
+          โน้ต
+        </Link>
       </nav>
 
+      {tab === "overview" && (
       <section id="overview" className="card scroll-mt-16">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="font-medium">ภาพรวม</h2>
@@ -419,6 +472,12 @@ export default function ClientDetailPage() {
                         setEdit({ ...edit, avatar_text: normalizeClientCode(e.target.value) })
                       }
                     />
+                    {codeAvailable === false && (
+                      <p className="mt-1 text-xs text-red-600">รหัสนี้ถูกใช้แล้ว</p>
+                    )}
+                    {codeAvailable === true && (
+                      <p className="mt-1 text-xs text-emerald-600">รหัสนี้ใช้ได้</p>
+                    )}
                   </div>
                   <div>
                     <label className="label">สี</label>
@@ -488,23 +547,31 @@ export default function ClientDetailPage() {
           </div>
         </Modal>
       </section>
+      )}
 
       {/* Credentials */}
+      {tab === "credentials" && (
       <section id="credentials" className="card scroll-mt-16">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">ข้อมูลเข้าระบบ</h2>
-          <button
-            className="btn"
-            onClick={() => {
-              if (showCredForm) cancelCredForm();
-              else setShowCredForm(true);
-            }}
-          >
-            {showCredForm ? "ยกเลิก" : "เพิ่มข้อมูลเข้าระบบ"}
+          <button className="btn" onClick={() => setShowCredForm(true)}>
+            + เพิ่มข้อมูลเข้าระบบ
           </button>
         </div>
-        {showCredForm && (
-          <form onSubmit={saveCredential} className="card mb-3 space-y-3">
+        <Modal
+          open={showCredForm}
+          onClose={cancelCredForm}
+          title={editingCredId ? "แก้ไขข้อมูลเข้าระบบ" : "เพิ่มข้อมูลเข้าระบบ"}
+          footer={
+            <>
+              <button className="btn" onClick={cancelCredForm}>ยกเลิก</button>
+              <button form="cred-form" className="btn-primary">
+                {editingCredId ? "บันทึกการแก้ไข" : "บันทึก"}
+              </button>
+            </>
+          }
+        >
+          <form id="cred-form" onSubmit={saveCredential} className="space-y-3">
             <div>
               <label className="label">แพลตฟอร์ม * (เลือกหรือพิมพ์เอง)</label>
               <input
@@ -539,9 +606,8 @@ export default function ClientDetailPage() {
               <label className="label">หมายเหตุ</label>
               <input className="input" value={cred.notes} onChange={(e) => setCred({ ...cred, notes: e.target.value })} />
             </div>
-            <button className="btn-primary">{editingCredId ? "บันทึกการแก้ไข" : "บันทึก"}</button>
           </form>
-        )}
+        </Modal>
         <div className="space-y-2 md:hidden">
           {credentials.map((c) => (
             <div key={c.id} className="rounded border border-neutral-200 bg-neutral-50 p-3">
@@ -610,17 +676,29 @@ export default function ClientDetailPage() {
           </tbody>
         </table>
       </section>
+      )}
 
       {/* Shareholders */}
+      {tab === "shareholders" && (
       <section id="shareholders" className="card scroll-mt-16">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">ผู้ถือหุ้น</h2>
-          <button className="btn" onClick={() => setShowShForm(!showShForm)}>
-            {showShForm ? "ยกเลิก" : "เพิ่มผู้ถือหุ้น"}
+          <button className="btn" onClick={() => setShowShForm(true)}>
+            + เพิ่มผู้ถือหุ้น
           </button>
         </div>
-        {showShForm && (
-          <form onSubmit={addShareholder} className="card mb-3 space-y-3">
+        <Modal
+          open={showShForm}
+          onClose={() => setShowShForm(false)}
+          title="เพิ่มผู้ถือหุ้น"
+          footer={
+            <>
+              <button className="btn" onClick={() => setShowShForm(false)}>ยกเลิก</button>
+              <button form="shareholder-form" className="btn-primary">บันทึก</button>
+            </>
+          }
+        >
+          <form id="shareholder-form" onSubmit={addShareholder} className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="label">ชื่อ *</label>
@@ -693,9 +771,8 @@ export default function ClientDetailPage() {
               />
               กรรมการผู้จัดการ / ผู้มีอำนาจลงนาม
             </label>
-            <button className="btn-primary w-fit">บันทึก</button>
           </form>
-        )}
+        </Modal>
         <div className="space-y-2 md:hidden">
           {shareholders.map((s) => (
             <div key={s.id} className="rounded border border-neutral-200 bg-neutral-50 p-3">
@@ -789,13 +866,17 @@ export default function ClientDetailPage() {
           </tbody>
         </table>
       </section>
+      )}
 
       {/* Files */}
+      {tab === "files" && (
       <div id="files" className="scroll-mt-16">
         <FileSection clientId={id} onChanged={load} />
       </div>
+      )}
 
       {/* Tasks */}
+      {tab === "tasks" && (
       <section id="tasks" className="card scroll-mt-16">
         <h2 className="mb-2 font-medium">งานของลูกค้านี้</h2>
         <div className="space-y-2 md:hidden">
@@ -839,7 +920,9 @@ export default function ClientDetailPage() {
           </tbody>
         </table>
       </section>
+      )}
 
+      {tab === "overview" && (
       <section className="card">
         <h2 className="mb-2 font-medium">จัดการลูกค้า</h2>
         {!confirmingDelete ? (
@@ -878,6 +961,7 @@ export default function ClientDetailPage() {
           </div>
         )}
       </section>
+      )}
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>

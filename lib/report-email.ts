@@ -2,8 +2,7 @@ import "server-only";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { sql } from "@/lib/db";
 import { r2, R2_BUCKET } from "@/lib/r2";
-import { periodToThai } from "@/lib/report-format";
-import { sanitizeFileName } from "@/lib/download";
+import { periodToThai, reportExportFileName } from "@/lib/report-format";
 import {
   buildReportEmail,
   type ReportEmailInput,
@@ -101,8 +100,9 @@ export async function loadReportEmailContext(
   reportId: string
 ): Promise<ReportEmailContext> {
   const rows = (await sql`
-    select r.status, r.period_label, r.report_no, r.label,
-           c.id as client_id, c.name as client_name, c.email as client_email
+    select r.status, r.period_label, r.report_no, r.label, r.seq,
+           c.id as client_id, c.name as client_name, c.email as client_email,
+           c.avatar_text as client_avatar_text
     from monthly_reports r
     join clients c on c.id = r.client_id
     where r.id=${reportId}
@@ -111,9 +111,11 @@ export async function loadReportEmailContext(
     period_label: string;
     report_no: string | null;
     label: string | null;
+    seq: number | null;
     client_id: string;
     client_name: string;
     client_email: string | null;
+    client_avatar_text: string | null;
   }[];
   const report = rows[0];
   if (!report) return { ok: false, error: "ไม่พบรายงาน", status: 404 };
@@ -156,8 +158,13 @@ export async function loadReportEmailContext(
 
   const periodTh = periodToThai(report.period_label);
   const label = report.label?.trim() || null;
-  const base = `รายงานภาษี-${report.client_name}-${periodTh}${label ? `-${label}` : ""}`;
-  const attachmentName = `${sanitizeFileName(base)}.pdf`;
+  const attachmentName = reportExportFileName({
+    periodLabel: report.period_label,
+    clientName: report.client_name,
+    avatarText: report.client_avatar_text,
+    reportLabel: report.label,
+    seq: report.seq,
+  });
 
   return {
     ok: true,

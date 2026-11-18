@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  checkClientCodeAvailable,
   createClient,
   updateClient,
   type Client,
@@ -66,6 +67,8 @@ export default function ClientsView({ initialClients }: { initialClients: Client
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
+  const [checkingCode, setCheckingCode] = useState(false);
 
   useEffect(() => setClients(initialClients), [initialClients]);
   useEffect(() => setSearchText(q), [q]);
@@ -97,6 +100,22 @@ export default function ClientsView({ initialClients }: { initialClients: Client
     () => (form.name.trim() ? suggestClientCode(form.name, takenCodes) : ""),
     [form.name, takenCodes]
   );
+
+  useEffect(() => {
+    const code = form.avatar_text;
+    if (!showForm || !isValidClientCode(code)) {
+      setCodeAvailable(null);
+      return;
+    }
+    setCheckingCode(true);
+    const timer = window.setTimeout(() => {
+      checkClientCodeAvailable(code, editingId ?? undefined)
+        .then(setCodeAvailable)
+        .catch(() => setCodeAvailable(null))
+        .finally(() => setCheckingCode(false));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [form.avatar_text, editingId, showForm]);
 
   const filtered = useMemo(() => {
     let rows = [...clients];
@@ -155,6 +174,10 @@ export default function ClientsView({ initialClients }: { initialClients: Client
       setFormError("กรอกชื่อและรหัสลูกค้า (A-Z 0-9 ไม่เกิน 4 ตัว)");
       return;
     }
+    if (codeAvailable === false) {
+      setFormError("รหัสลูกค้านี้ถูกใช้แล้ว กรุณาเปลี่ยน");
+      return;
+    }
     setSubmitting(true);
     setFormError("");
     try {
@@ -176,6 +199,21 @@ export default function ClientsView({ initialClients }: { initialClients: Client
     } finally {
       setSubmitting(false);
     }
+  }
+
+  const statusCounts = useMemo(
+    () => ({
+      all: clients.length,
+      active: clients.filter((c) => c.status === "active").length,
+      archived: clients.filter((c) => c.status === "archived").length,
+    }),
+    [clients]
+  );
+  const activeFilterCount =
+    (q ? 1 : 0) + (status !== "all" ? 1 : 0) + (favOnly ? 1 : 0) + (sort !== "name" || dir !== "asc" ? 1 : 0);
+
+  function clearFilters() {
+    router.replace("/clients", { scroll: false });
   }
 
   const statusTone = (s: string) => (s === "active" ? "success" : "neutral");
@@ -215,7 +253,10 @@ export default function ClientsView({ initialClients }: { initialClients: Client
                   status === t.key ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
                 }`}
               >
-                {t.label}
+                {t.label}{" "}
+                <span className={status === t.key ? "text-blue-600" : "text-neutral-400"}>
+                  {statusCounts[t.key]}
+                </span>
               </button>
             ))}
           </div>
@@ -245,6 +286,11 @@ export default function ClientsView({ initialClients }: { initialClients: Client
           >
             {dir === "asc" ? "↑" : "↓"}
           </button>
+          {activeFilterCount > 0 && (
+            <button type="button" className="btn" onClick={clearFilters}>
+              ล้างตัวกรอง ({activeFilterCount})
+            </button>
+          )}
         </div>
         <p className="text-xs text-neutral-500">
           {q || status !== "all" || favOnly ? `พบ ${filtered.length} ราย` : `แสดง ${filtered.length} ราย`}
@@ -264,7 +310,7 @@ export default function ClientsView({ initialClients }: { initialClients: Client
           <div className="hidden overflow-x-auto rounded-xl border border-neutral-200 bg-white md:block">
             <table className="table-base w-full">
               <thead>
-                <tr>
+                <tr className="sticky top-0 z-10 bg-neutral-50">
                   <th className="w-10"></th>
                   <th>ลูกค้า</th>
                   <th className="w-56">ติดต่อ</th>
@@ -409,6 +455,15 @@ export default function ClientsView({ initialClients }: { initialClients: Client
                 >
                   ใช้รหัสที่แนะนำ: {suggestion}
                 </button>
+              )}
+              {checkingCode && (
+                <p className="mt-1 text-xs text-neutral-400">กำลังตรวจสอบรหัส...</p>
+              )}
+              {!checkingCode && codeAvailable === false && (
+                <p className="mt-1 text-xs text-red-600">รหัสนี้ถูกใช้แล้ว กรุณาเปลี่ยน</p>
+              )}
+              {!checkingCode && codeAvailable === true && (
+                <p className="mt-1 text-xs text-emerald-600">รหัสนี้ใช้ได้</p>
               )}
             </div>
             <div>
